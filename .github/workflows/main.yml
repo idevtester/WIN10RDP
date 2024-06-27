@@ -34,9 +34,27 @@ jobs:
     - name: Waiting for ngrok to initialize
       run: Start-Sleep -Seconds 10
 
-    - name: Fetch ngrok tunnel URL
+    - name: Fetch ngrok tunnel URL with retry
       run: |
-        $ngrokUrl = (curl.exe http://127.0.0.1:4040/api/tunnels | ConvertFrom-Json).tunnels[0].public_url
+        $maxRetries = 5
+        $retryInterval = 5
+        $attempt = 0
+        $ngrokUrl = $null
+
+        while ($null -eq $ngrokUrl -and $attempt -lt $maxRetries) {
+          $attempt++
+          try {
+            $ngrokUrl = (curl.exe http://127.0.0.1:4040/api/tunnels | ConvertFrom-Json).tunnels[0].public_url
+          } catch {
+            Write-Host "Attempt $attempt failed. Retrying in $retryInterval seconds..."
+            Start-Sleep -Seconds $retryInterval
+          }
+        }
+
+        if ($null -eq $ngrokUrl) {
+          throw "Failed to fetch ngrok tunnel URL after $maxRetries attempts."
+        }
+
         echo "RDP Connection URL: $ngrokUrl" | Out-File -FilePath rdp_connection.txt
 
     - name: Output RDP connection details
